@@ -18,26 +18,49 @@ print(df.isnull().sum())
 df["genres"] = df["genres"].fillna("Other")
 df["episodes"] = df["episodes"].fillna(1)
 
-#création de nouvelles colonnes : pe
+
 
 #suppression des colonnes inutiles
 
-colonne_a_drop = ['score','synopsis','trailer']
+colonne_a_drop = ['synopsis','trailer','producers']
 df.drop(columns=colonne_a_drop)
 
 
-#Nombre de lignes après le nettoyage
-print(df.isnull().sum())
-print(df.shape)
+print(df["aired_from"])
 
 
 duplicate = df[df.duplicated()]
+
+
 
 print("Duplicate Rows :")
 
 # Print the resultant Dataframe
 print(duplicate["name"])
 
+#Nombre de lignes après le nettoyage
+print(df.isnull().sum())
+print(df.shape)
+
+
+df["aired_from"] = df["aired_from"].fillna("Unknown")
+
+#Création de nouvelle colonne
+def get_season_anime(date):
+    if(date != "Unknown"):
+        date = pd.to_datetime(date)
+
+        month = date.month
+
+        season_index = (month - 1) // 3 
+        
+        seasons = ["Winter", "Spring", "Summer", "Fall"]
+        
+        return seasons[season_index]
+
+print(get_season_anime("2009-04-05T00:00:00+00:00"))
+
+df["season_aired"] = df["aired_from"].apply(get_season_anime)
 
 #recherche de corrélation entre les variables
 #print(df.corr())
