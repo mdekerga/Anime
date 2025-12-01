@@ -38,9 +38,8 @@ df['aired_to'] = df['aired_to'].fillna(pd.NaT)
 def get_season_anime(date):
     if(pd.isna(date)):
         return np.nan
-
-    date = pd.to_datetime(date)
-
+    if(type(date) == str):
+        date = pd.to_datetime(date)
     month = date.month
 
     season_index = (month - 1) // 3 
@@ -49,7 +48,7 @@ def get_season_anime(date):
         
     return seasons[season_index]
 
-print(get_season_anime("2009-04-05T00:00:00+00:00"))
+print(get_season_anime(pd.to_datetime("2009-04-05T00:00:00+00:00")))
 
 df["season_aired"] = df["aired_from"].apply(get_season_anime)
 
@@ -57,7 +56,7 @@ df["season_aired"] = df["aired_from"].apply(get_season_anime)
 print(df.isnull().sum())
 print(df.shape)
 
-
+print(df.sort_values(by=["aired_from"],ascending=False))
 
 #recherche de corrélation entre les variables
 #print(df.corr())
