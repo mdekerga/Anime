@@ -1,8 +1,9 @@
 import pandas as pd
-import tkinter as tk
-from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tkinter as tk
+from tkinter import ttk, messagebox
+import random 
 
 # ==========================================
 # 1. CHARGEMENT ET PRÉPARATION
@@ -13,7 +14,8 @@ def charger_et_preparer_donnees(chemin_csv):
         try:
             df = pd.read_csv(chemin_csv)
         except FileNotFoundError:
-            print(" Fichier introuvable.")
+            print("Fichier introuvable.")
+            return None
 
         # Nettoyage
         def extract_season(premiered_str):
@@ -30,7 +32,8 @@ def charger_et_preparer_donnees(chemin_csv):
                 df[col] = df[col].astype(str).str.strip()
             else:
                 df[col] = "Unknown"
-            
+        
+        # On retire les lignes sans score pour l'apprentissage
         return df.dropna(subset=['Score'])
     except Exception as e:
         messagebox.showerror("Erreur Fatale", f"Impossible de traiter les données : {e}")
@@ -66,12 +69,13 @@ def entrainer_modele(df):
         'adj_genre': {}
     }
     
-    # Gestion des genres (FILTRE Award Winning + Unknown)
+    # Gestion des genres
     all_genres = set()
     for g_str in df['Genres']:
         all_genres.update([g.strip() for g in g_str.split(',')])
 
-    genres_a_ignorer = ["Award Winning", "Unknown"]
+    # Liste noire des genres à ignorer
+    genres_a_ignorer = ["Award Winning", "UNKNOWN", "nan"]
 
     for genre in all_genres:
         if genre in genres_a_ignorer:
@@ -108,15 +112,17 @@ def predire_note(model, studio, source, type_anime, rating, genre, saison):
     return final_score, details
 
 # ==========================================
-# 4. DASHBOARD (Visualisation filtrée)
+# 4. DASHBOARD 
 # ==========================================
 
 def afficher_dashboard(model, df):
-    # Calcul des prédictions
+    # Calcul des prédictions pour le graphique de précision
     def predict_row(row):
-        g = row['Genres'].split(',')[0].strip()
-        if g == "Award Winning" and "," in row['Genres']:
-             g = row['Genres'].split(',')[1].strip()
+        genres_list = row['Genres'].split(',')
+        g = genres_list[0].strip()
+        if (g in ["Award Winning", "UNKNOWN", "nan"]) and len(genres_list) > 1:
+             g = genres_list[1].strip()
+             
         p, _ = predire_note(model, row['Studios'], row['Source'], row['Type'], 
                             row['Rating'], g, row['season_cleaned'])
         return p
@@ -124,14 +130,15 @@ def afficher_dashboard(model, df):
     df_viz = df.copy()
     df_viz['prediction'] = df_viz.apply(predict_row, axis=1)
 
-    # Style Matplotlib Clair
+    mae = (df_viz['Score'] - df_viz['prediction']).abs().mean()
+
     plt.style.use('default') 
-    plt.figure(figsize=(14, 10))
+    plt.figure(figsize=(16, 10)) 
     plt.suptitle("Tableau de Bord - Analyse des Facteurs de Succès", fontsize=16)
 
     # 1. Saisons
-    plt.subplot(2, 2, 1)
-    saisons_data = {k: v for k, v in model['adj_season'].items() if k != 'Unknown'}
+    plt.subplot(2, 3, 1) 
+    saisons_data = {k: v for k, v in model['adj_season'].items() if k != 'UNKNOWN' or k != 'Unknown'}
     saisons = list(saisons_data.keys())
     valeurs = list(saisons_data.values())
     if saisons:
@@ -141,8 +148,8 @@ def afficher_dashboard(model, df):
     plt.axhline(0, color='black', linewidth=0.8)
 
     # 2. Formats
-    plt.subplot(2, 2, 2)
-    types_data = {k: v for k, v in model['adj_type'].items() if k != 'Unknown'}
+    plt.subplot(2, 3, 2) 
+    types_data = {k: v for k, v in model['adj_type'].items() if k != 'UNKNOWN'}
     types = list(types_data.keys())
     valeurs_type = list(types_data.values())
     if types:
@@ -151,26 +158,53 @@ def afficher_dashboard(model, df):
     plt.axhline(0, color='black', linewidth=0.8)
 
     # 3. Top Genres
-    sorted_genres = sorted(model['adj_genre'].items(), key=lambda x: x[1], reverse=True)
-    top_genres = dict(sorted_genres[:5])
-    plt.subplot(2, 2, 3)
+    all_sorted_genres = sorted(model['adj_genre'].items(), key=lambda x: x[1], reverse=True)
+    clean_sorted_genres = [x for x in all_sorted_genres if x[0] not in ["UNKNOWN", "nan"]]
+    top_genres = dict(clean_sorted_genres[:5])
+    plt.subplot(2, 3, 3)
     if top_genres:
         sns.barplot(x=list(top_genres.values()), y=list(top_genres.keys()), hue=list(top_genres.keys()), palette="Greens_r", legend=False)
     plt.title("Top 5 Genres (Bonus)")
 
-    # 4. Précision
-    plt.subplot(2, 2, 4)
+    # 4. 5 Pires Genres (Filtrés)
+    worst_genres = dict(clean_sorted_genres[-5:])
+    x_vals_worst = list(worst_genres.values())
+    y_vals_worst = list(worst_genres.keys())
+    
+    plt.subplot(2, 3, 4) 
+    if worst_genres:
+        sns.barplot(x=x_vals_worst, y=y_vals_worst, hue=y_vals_worst, palette="Reds_r", legend=False)
+    plt.title("5 pires Genres (Malus)")
+
+    # 5. Précision
+    plt.subplot(2, 3, 5)
     plt.scatter(df_viz['Score'], df_viz['prediction'], alpha=0.6, color='purple')
     if not df_viz.empty:
         min_val = min(df_viz['Score'].min(), df_viz['prediction'].min())
         plt.plot([min_val, 10], [min_val, 10], color='red', linestyle='--', label="Idéal")
+    
+    plt.title(f"Précision (MAE: {mae:.2f})") 
     plt.xlabel("Note Réelle")
     plt.ylabel("Note Prédite")
-    plt.title("Précision du Modèle")
     plt.legend()
+
+    # 6. Rating 
+    plt.subplot(2, 3, 6)
+    rating_data = {k: v for k, v in model['adj_rating'].items() if k != 'UNKNOWN'}
+    r_keys = list(rating_data.keys())
+    r_vals = list(rating_data.values())
+    
+    r_labels_short = [label.split(' - ')[0] if ' - ' in label else label for label in r_keys]
+    
+    if r_keys:
+        sns.barplot(x=r_keys, y=r_vals, hue=r_keys, palette="magma", legend=False)
+        plt.xticks(range(len(r_keys)), r_labels_short, rotation=15)
+    plt.title("Impact Classification (Rating)")
+    plt.axhline(0, color='black', linewidth=0.8)
 
     plt.tight_layout()
     plt.show()
+
 
 # ==========================================
 # 5. INTERFACE GRAPHIQUE 
@@ -181,20 +215,18 @@ class AnimePredictorApp:
         self.model = model
         self.df = df
         self.root = root
-        self.root.title("🔮 Anime Predictor - Version Claire")
-        self.root.geometry("650x750")
+        self.root.title("🔮 Anime Predictor")
+        self.root.geometry("650x800") 
         
-        # --- COULEURS CLAIRES (Lisibilité maximale) ---
-        BG_COLOR = "#f5f6fa"       # Fond très clair (quasi blanc)
-        FG_COLOR = "#2c3e50"       # Texte gris foncé
-        ACCENT_COLOR = "#2980b9"   # Bleu professionnel
-        RESULT_BG = "#ffffff"      # Blanc pur pour les résultats
+        BG_COLOR = "#f5f6fa"       
+        FG_COLOR = "#2c3e50"       
+        ACCENT_COLOR = "#2980b9"   
+        RESULT_BG = "#ffffff"      
 
         self.root.configure(bg=BG_COLOR)
 
-        # --- STYLE ---
         style = ttk.Style()
-        style.theme_use('clam') # Theme stable
+        style.theme_use('clam') 
         
         # Configuration générique
         style.configure("TFrame", background=BG_COLOR)
@@ -205,7 +237,7 @@ class AnimePredictorApp:
         style.configure("TButton", font=("Segoe UI", 11, "bold"), background=ACCENT_COLOR, foreground="white", borderwidth=0)
         style.map("TButton", background=[('active', '#3498db')])
         
-        # Listes déroulantes (Combobox) - Style standard système pour éviter les bugs
+        # Listes déroulantes
         style.configure("TCombobox", fieldbackground="white", background="white", foreground="black")
 
         # --- CONTENU ---
@@ -215,7 +247,8 @@ class AnimePredictorApp:
         main_frame = ttk.Frame(root, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.studios = sorted([k for k in model['adj_studio'].keys()])
+        self.studios = sorted([k for k, v in model['adj_studio'].items() if v != 0])
+        
         self.sources = sorted([k for k in model['adj_source'].keys()])
         self.types = sorted([k for k in model['adj_type'].keys()])
         self.ratings = sorted([k for k in model['adj_rating'].keys()])
@@ -234,8 +267,12 @@ class AnimePredictorApp:
         btn_frame = ttk.Frame(root, padding="10")
         btn_frame.pack(fill=tk.X)
         
+
+        rand_btn = ttk.Button(btn_frame, text="🎲 GÉNÉRER ALÉATOIREMENT", command=self.generer_aleatoire)
+        rand_btn.pack(fill=tk.X, pady=(5, 5), padx=40, ipady=5)
+
         predict_btn = ttk.Button(btn_frame, text="LANCER LA SIMULATION", command=self.lancer_calcul)
-        predict_btn.pack(fill=tk.X, pady=(10, 5), padx=40, ipady=5)
+        predict_btn.pack(fill=tk.X, pady=(5, 5), padx=40, ipady=5)
 
         viz_btn = ttk.Button(btn_frame, text="📊 VOIR LES STATISTIQUES", command=self.ouvrir_viz)
         viz_btn.pack(fill=tk.X, pady=5, padx=40)
@@ -244,24 +281,25 @@ class AnimePredictorApp:
         self.result_frame = ttk.LabelFrame(root, text=" Analyse ", padding="15")
         self.result_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Style spécifique pour le cadre de résultat
         style.configure("TLabelframe", background=BG_COLOR, bordercolor="#ccc")
         style.configure("TLabelframe.Label", background=BG_COLOR, foreground="#555")
         
         self.score_label = ttk.Label(self.result_frame, text="-- / 10", font=("Segoe UI", 28, "bold"), foreground="#7f8c8d")
         self.score_label.pack(pady=5)
         
-        # Zone de texte standard (noir sur blanc)
         self.details_text = tk.Text(self.result_frame, height=8, bg=RESULT_BG, fg="black", relief="flat", font=("Consolas", 10))
         self.details_text.pack(fill=tk.BOTH, expand=True)
 
     def create_dropdown(self, parent, label_text, values, var_name, row):
+        values_epurees = [v for v in values if v not in ["Unknown", "UNKNOWN", "nan"]]
         ttk.Label(parent, text=label_text).grid(row=row, column=0, sticky="w", pady=8)
         var = tk.StringVar()
-        combo = ttk.Combobox(parent, textvariable=var, values=values, state="readonly", width=32)
+
+        combo = ttk.Combobox(parent, textvariable=var, values=values_epurees, state="readonly", width=32)
         combo.grid(row=row, column=1, sticky="e", pady=8, padx=10)
-        if values: combo.current(0)
-        else: combo.set("Unknown")
+        
+        if values_epurees:
+            combo.current(0)
         self.vars[var_name] = var
 
     def lancer_calcul(self):
@@ -269,7 +307,6 @@ class AnimePredictorApp:
         note, details = predire_note(self.model, inputs['studio'], inputs['source'], inputs['type'], 
                                      inputs['rating'], inputs['genre'], inputs['saison'])
         
-        # Couleurs adaptées au fond blanc
         color = "#c0392b" if note < 6.5 else "#f39c12" if note < 8 else "#27ae60"
         self.score_label.config(text=f"{note:.2f} / 10", foreground=color)
         
@@ -278,6 +315,17 @@ class AnimePredictorApp:
         for line in details:
             self.details_text.insert(tk.END, f" {line}\n")
 
+    def generer_aleatoire(self):
+        if self.studios: self.vars['studio'].set(random.choice(self.studios))
+        if self.sources: self.vars['source'].set(random.choice(self.sources))
+        if self.types: self.vars['type'].set(random.choice(self.types))
+        if self.genres: self.vars['genre'].set(random.choice(self.genres))
+        if self.saisons: self.vars['saison'].set(random.choice(self.saisons))
+        if self.ratings: self.vars['rating'].set(random.choice(self.ratings))
+        
+
+        self.lancer_calcul()
+
     def ouvrir_viz(self):
         afficher_dashboard(self.model, self.df)
 
@@ -285,6 +333,7 @@ class AnimePredictorApp:
 # 6. EXÉCUTION
 # ==========================================
 if __name__ == "__main__":
+    # Assurez-vous d'avoir le bon nom de fichier CSV
     df = charger_et_preparer_donnees('anime-dataset-2023.csv') 
     
     if df is not None:
