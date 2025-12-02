@@ -6,6 +6,12 @@ import numpy as np
 file = "popular_anime.csv"
 
 df = pd.read_csv(file)
+"""
+Liste des colonnes du fichier :
+name, genres, type, episodes,status, aired_from, aired_to, duration_per_ep, score, scored_by, rank, rating, studios, producers, image, trailer, synopsis
+"""
+
+#1.Traitement des données
 
 #Nombre de lignes avant le nettoyage
 print(df.shape)
@@ -25,8 +31,12 @@ df = df.drop(columns=colonne_a_drop)
 #suppression de ligne 
 df = df.dropna(subset=['score', 'episodes', 'scored_by', 'rank',"rating","studios"])
 
+
+
 #Suppression des duplications
 df = df.drop_duplicates()
+
+
 
 #réinitilise l'index 
 df.reset_index(drop=True, inplace=True)
@@ -56,7 +66,16 @@ df["season_aired"] = df["aired_from"].apply(get_season_anime)
 print(df.isnull().sum())
 print(df.shape)
 
-print(df.sort_values(by=["aired_from"],ascending=False))
 
-#recherche de corrélation entre les variables
-#print(df.corr())
+
+df.to_csv("clean_anime.csv")
+
+
+#2. Modèle décisionnel
+
+
+
+
+
+
+#3. Analyse et visualisation
