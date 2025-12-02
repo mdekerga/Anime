@@ -1,7 +1,7 @@
 # Anime
 
 ## Problématique
-Si une plateforme de streaming devait financer l'adaptation d'une nouvelle œuvre, quel serait le profil idéal (Genre(s), Source, Période de Diffusion) à privilégier pour maximiser la probabilité d'atteindre le top 10% des anime les mieux notés
+Quel est l'impact réel des choix de production (studio, format, classification) sur la réception critique d'une œuvre ?
 
 ## Links
-Link data : https://www.kaggle.com/datasets/tanishksharma9905/top-popular-anime
+Link data : [https://www.kaggle.com/datasets/tanishksharma9905/top-popular-anime](https://www.kaggle.com/datasets/dbdmobile/myanimelist-dataset/data)
