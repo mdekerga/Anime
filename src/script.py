@@ -139,7 +139,7 @@ def afficher_dashboard(model, df):
 
     # 1. Saisons
     plt.subplot(2, 3, 1) 
-    saisons_data = {k: v for k, v in model['adj_season'].items() if k != 'UNKNOWN'}
+    saisons_data = {k: v for k, v in model['adj_season'].items() if k != 'Unknown'}
     saisons = list(saisons_data.keys())
     valeurs = list(saisons_data.values())
     if saisons:
